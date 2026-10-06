@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixtures:
+    name: fixtures unchanged
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: python scripts/validate_pack.py
+      - name: Reference hashes match docs/reqs/README.md
+        run: |
+          set -e
+          for f in data/node_catalog.json data/seed_workflows.json scripts/smoke_test.py scripts/duplication_check.py; do
+            h=$(sha256sum "$f" | cut -d' ' -f1)
+            grep -q "$h" docs/reqs/README.md || { echo "::error::$f changed (hash $h not in docs/reqs/README.md)"; exit 1; }
+          done
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: gradle/actions/setup-gradle@v4
+        with: { gradle-version: "8.14.3" }
+      - name: Unit, slice and Testcontainers integration tests
+        run: gradle -p backend test checkstyleMain spotbugsMain -PstrictQuality
+      - name: Formatting (google-java-format)
+        run: gradle -p backend spotlessCheck
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-test-reports
+          path: backend/build/reports
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: npm }
+      - run: npm ci --no-audit --no-fund
+      - run: npm --workspace frontend run lint
+      - run: npm --workspace frontend run typecheck
+      - run: npm --workspace frontend run format:check
+      - run: npm --workspace frontend run test
+      - run: npm --workspace frontend run build
+
+  ai-sidecar:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ai-sidecar } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: ruff check app tests
+      - run: black --check app tests
+      - run: mypy app
+      - run: pytest -q
+
+  integration:
+    name: smoke test + kill-and-resume drill
+    needs: [fixtures, backend, frontend, ai-sidecar]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Start the stack
+        run: |
+          cp .env.example .env
+          docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+          for i in $(seq 1 90); do curl -fsS http://localhost:8080/actuator/health && break; sleep 2; done
+          for i in $(seq 1 30); do docker inspect -f '{{.State.Running}}' relay-worker | grep -q true && break; sleep 2; done
+      - name: Smoke test (must pass unmodified)
+        run: python scripts/smoke_test.py --url http://localhost:8080 --token relay-demo-token --world http://localhost:9210
+      - name: Kill-and-resume drill + duplication check (fails the build on any duplicate)
+        run: bash docker/drill.sh
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker/docker-compose.yml logs --no-color --tail=300

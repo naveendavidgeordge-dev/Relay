@@ -1,0 +1,158 @@
+# Relay backend configuration.
+# Profiles:
+#   (none)  all-in-one: API + in-process worker (dev convenience)
+#   api     HTTP API only, never executes nodes
+#   worker  worker loop only, no HTTP server (WORKER_ONLY=true selects this)
+spring:
+  application:
+    name: relay
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/relay}
+    username: ${DATABASE_USER:relay}
+    password: ${DATABASE_PASSWORD:relay}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:20}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    placeholders:
+      # Reserved for future migrations; the column key itself is passed at runtime, never baked in.
+      relay_schema_owner: ${DATABASE_USER:relay}
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+  threads:
+    virtual:
+      enabled: true
+  autoconfigure:
+    exclude:
+      # No form login / in-memory users: auth is bearer-token only (security/SecurityConfig).
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+relay:
+  auth:
+    demo-token: ${RELAY_DEMO_TOKEN:relay-demo-token}
+    jwt-public-key: ${RELAY_JWT_PUBLIC_KEY:}
+    jwt-issuer: ${RELAY_JWT_ISSUER:relay}
+  seed:
+    enabled: true
+    catalog: classpath:catalog/node_catalog.json
+    workflows: classpath:seed/seed_workflows.json
+    samples: classpath:seed/sample_payloads.jsonl
+  worker:
+    enabled: true
+    id: ${RELAY_WORKER_ID:}
+    concurrency: ${RELAY_WORKER_CONCURRENCY:4}
+    lease-seconds: ${RELAY_LEASE_SECONDS:15}
+    poll-interval-ms: ${RELAY_POLL_INTERVAL_MS:250}
+  engine:
+    enforce-timeout: false
+  compiler:
+    # heuristic (deterministic, no model) | llm (AI sidecar + one repair, falls back to heuristic)
+    mode: ${RELAY_COMPILER_MODE:heuristic}
+  schedule:
+    poll-ms: 10000
+  validation:
+    # warn | reject — see DESIGN/00-overview.md conflict C3
+    cyclic-entry: warn
+  retry:
+    max-attempts: ${RELAY_RETRY_MAX_ATTEMPTS:5}
+    initial-interval-ms: ${RELAY_RETRY_INITIAL_INTERVAL_MS:500}
+    multiplier: ${RELAY_RETRY_MULTIPLIER:2.0}
+    max-interval-ms: ${RELAY_RETRY_MAX_INTERVAL_MS:8000}
+    randomization-factor: 0.5
+  http:
+    connect-timeout-ms: ${RELAY_HTTP_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${RELAY_HTTP_READ_TIMEOUT_MS:10000}
+    url-aliases: ${RELAY_URL_ALIASES:}
+    allowed-hosts: ${RELAY_HTTP_ALLOWED_HOSTS:}
+  mock-world:
+    url: ${MOCK_WORLD_URL:http://localhost:9210}
+  ai:
+    sidecar-url: ${AI_SIDECAR_URL:http://localhost:8090}
+    timeout-ms: ${AI_SIDECAR_TIMEOUT_MS:30000}
+    log-prompts: ${AI_LOG_PROMPTS:false}
+  crypto:
+    provider: ${RELAY_PQ_PROVIDER:bouncycastle}
+    master-key: ${RELAY_MASTER_KEY:ZGV2LW9ubHktbWFzdGVyLWtleS1jaGFuZ2UtbWUtMzI=}
+    db-column-key: ${RELAY_DB_COLUMN_KEY:dev-only-column-key-change-me}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      mockWorld:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      aiSidecar:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 8
+        max-wait-duration: 2s
+    instances:
+      node-http_request: { base-config: default }
+      node-notify: { base-config: default }
+      node-order_action: { base-config: default, max-concurrent-calls: 2 }
+      node-ai: { base-config: default, max-concurrent-calls: 4 }
+---
+spring:
+  config:
+    activate:
+      on-profile: api
+relay:
+  worker:
+    enabled: false
+---
+spring:
+  config:
+    activate:
+      on-profile: worker
+  main:
+    web-application-type: none
+relay:
+  seed:
+    # Seeds are loaded by the API process; the worker only executes.
+    enabled: false
+  worker:
+    enabled: true

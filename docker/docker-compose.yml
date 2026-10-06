@@ -1,0 +1,113 @@
+# Relay full stack. From the repo root:
+#   cp .env.example .env && docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+# Optional TLS 1.3 front door:   ... --profile tls up -d   (run docker/nginx/gen-certs.sh first)
+name: relay
+
+x-backend-env: &backend-env
+  DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-relay}
+  DATABASE_USER: ${POSTGRES_USER:-relay}
+  DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-relay}
+  RELAY_DEMO_TOKEN: ${RELAY_DEMO_TOKEN:-relay-demo-token}
+  RELAY_JWT_PUBLIC_KEY: ${RELAY_JWT_PUBLIC_KEY:-}
+  MOCK_WORLD_URL: http://mock-world:9210
+  # The seeds hardcode http://localhost:9210 (DESIGN/00 conflict C2); rewritten at dispatch time only.
+  RELAY_URL_ALIASES: http://localhost:9210=>http://mock-world:9210
+  RELAY_HTTP_ALLOWED_HOSTS: ${RELAY_HTTP_ALLOWED_HOSTS:-}
+  AI_SIDECAR_URL: http://ai-sidecar:8090
+  RELAY_COMPILER_MODE: ${RELAY_COMPILER_MODE:-heuristic}
+  AI_LOG_PROMPTS: ${AI_LOG_PROMPTS:-false}
+  RELAY_PQ_PROVIDER: ${RELAY_PQ_PROVIDER:-bouncycastle}
+  RELAY_MASTER_KEY: ${RELAY_MASTER_KEY}
+  RELAY_DB_COLUMN_KEY: ${RELAY_DB_COLUMN_KEY}
+  RELAY_RETRY_MAX_ATTEMPTS: ${RELAY_RETRY_MAX_ATTEMPTS:-5}
+  RELAY_LEASE_SECONDS: ${RELAY_LEASE_SECONDS:-15}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: relay-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-relay}
+      POSTGRES_USER: ${POSTGRES_USER:-relay}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-relay}
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mock-world:
+    image: python:3.11-slim
+    container_name: relay-mock-world
+    command: ["python", "/pack/scripts/mock_world.py", "--port", "9210"]
+    volumes: ["../scripts:/pack/scripts:ro"]
+    ports: ["9210:9210"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9210/health', timeout=2)"]
+      interval: 5s
+      retries: 10
+
+  ai-sidecar:
+    build: { context: .., dockerfile: docker/ai-sidecar.Dockerfile }
+    container_name: relay-ai-sidecar
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      AI_MODEL: ${AI_MODEL:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      AI_LOG_PROMPTS: ${AI_LOG_PROMPTS:-false}
+      MOCK_AI_FIRST_INVALID: ${MOCK_AI_FIRST_INVALID:-false}
+    ports: ["8090:8090"]
+
+  backend:
+    build: { context: .., dockerfile: docker/backend.Dockerfile }
+    image: relay-backend:local
+    container_name: relay-api
+    environment:
+      <<: *backend-env
+      SPRING_PROFILES_ACTIVE: api
+    ports: ["8080:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      mock-world: { condition: service_healthy }
+
+  worker:
+    image: relay-backend:local
+    container_name: relay-worker
+    environment:
+      <<: *backend-env
+      WORKER_ONLY: "true"
+      SPRING_PROFILES_ACTIVE: worker
+      # Stable identity: a restarted worker releases its previous incarnation's leases at once.
+      RELAY_WORKER_ID: worker-1
+      RELAY_WORKER_CONCURRENCY: ${RELAY_WORKER_CONCURRENCY:-4}
+    depends_on:
+      backend: { condition: service_healthy }
+      ai-sidecar: { condition: service_started }
+    restart: "no"   # the kill-and-resume drill restarts it explicitly
+
+  frontend:
+    build: { context: .., dockerfile: docker/frontend.Dockerfile }
+    container_name: relay-console
+    environment:
+      RELAY_API_URL: http://backend:8080
+      RELAY_API_TOKEN: ${RELAY_DEMO_TOKEN:-relay-demo-token}
+    ports: ["3000:3000"]
+    depends_on:
+      backend: { condition: service_healthy }
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: relay-tls
+    profiles: ["tls"]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    ports: ["8443:8443"]
+    depends_on: [backend, frontend]
+
+volumes:
+  pgdata:

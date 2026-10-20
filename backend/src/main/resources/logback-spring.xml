@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Structured JSON logs (logstash encoder). Every value passes through SensitiveDataMasker, which
+  redacts bearer tokens, webhook secrets (whsec_*), API keys and private-key material. trace_id,
+  run_id and node_id come from the MDC and are emitted as top-level fields.
+  Activate the Spring profile `plain-logs` for human-readable console output in local development.
+-->
+<configuration>
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="relay"/>
+
+  <!-- Declared before any appender that uses them. -->
+  <conversionRule conversionWord="maskedMsg" converterClass="com.relay.security.MaskingMessageConverter"/>
+
+  <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <customFields>{"service":"${appName}"}</customFields>
+      <includeMdcKeyName>trace_id</includeMdcKeyName>
+      <includeMdcKeyName>run_id</includeMdcKeyName>
+      <includeMdcKeyName>node_id</includeMdcKeyName>
+      <includeMdcKeyName>worker_id</includeMdcKeyName>
+      <jsonGeneratorDecorator class="net.logstash.logback.mask.MaskingJsonGeneratorDecorator">
+        <valueMasker class="com.relay.security.SensitiveDataMasker"/>
+      </jsonGeneratorDecorator>
+      <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+        <maxDepthPerThrowable>20</maxDepthPerThrowable>
+        <rootCauseFirst>true</rootCauseFirst>
+      </throwableConverter>
+    </encoder>
+  </appender>
+
+  <appender name="PLAIN" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <!-- %maskedMsg routes the message through SensitiveDataMasker as well. -->
+      <pattern>%d{HH:mm:ss.SSS} %-5level [%X{trace_id:-}] [%X{run_id:-}] %logger{30} - %maskedMsg%n</pattern>
+    </encoder>
+  </appender>
+
+  <logger name="com.relay" level="INFO"/>
+  <logger name="org.hibernate.SQL" level="WARN"/>
+
+  <springProfile name="plain-logs">
+    <root level="INFO"><appender-ref ref="PLAIN"/></root>
+  </springProfile>
+  <springProfile name="!plain-logs">
+    <root level="INFO"><appender-ref ref="JSON"/></root>
+  </springProfile>
+</configuration>

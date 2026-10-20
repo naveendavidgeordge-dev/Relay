@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <!-- Records and JPA entities intentionally expose Jackson nodes / collections. -->
+  <Match><Bug pattern="EI_EXPOSE_REP"/></Match>
+  <Match><Bug pattern="EI_EXPOSE_REP2"/></Match>
+  <!-- Spring beans throw from constructors on misconfiguration by design (fail fast). -->
+  <Match><Bug pattern="CT_CONSTRUCTOR_THROW"/></Match>
+</FindBugsFilter>

@@ -1,2 +1,6 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Keep LF everywhere so shell scripts, Dockerfiles and fixture hashes are stable across OSes.
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jar binary
+gradlew.bat text eol=crlf

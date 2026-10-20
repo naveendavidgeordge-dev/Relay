@@ -1,0 +1,17 @@
+{
+  "name": "relay",
+  "private": true,
+  "description": "Relay monorepo root. npm workspaces for the JavaScript side; the backend is a Gradle build and the AI sidecar a Python project.",
+  "workspaces": [
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm --workspace frontend run dev",
+    "build": "npm --workspace frontend run build",
+    "test": "npm --workspace frontend run test",
+    "lint": "npm --workspace frontend run lint"
+  }
+}

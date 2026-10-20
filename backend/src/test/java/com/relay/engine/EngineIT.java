@@ -20,7 +20,7 @@ import static org.mockito.Mockito.doAnswer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import com.relay.application.ApprovalService;
@@ -32,7 +32,6 @@ import com.relay.application.view.ApprovalView;
 import com.relay.application.view.RunView;
 import com.relay.domain.error.ConflictException;
 import com.relay.engine.queue.WorkQueue;
-import com.relay.integrations.ai.AiModelPort;
 import com.relay.integrations.http.OutboundHttp;
 import com.relay.testing.FakeModel;
 import com.relay.testing.Fixtures;
@@ -47,7 +46,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -74,9 +72,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 @ActiveProfiles("api")
 class EngineIT extends PostgresContainerSupport {
 
-  @RegisterExtension
-  static WireMockExtension world =
-      WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
+  // One server for the whole class (incl. @Nested groups): the cached Spring context keeps its URL.
+  static final WireMockServer world = new WireMockServer(wireMockConfig().dynamicPort());
+
+  static {
+    world.start();
+  }
 
   @DynamicPropertySource
   static void worldProps(DynamicPropertyRegistry r) {
@@ -94,11 +95,6 @@ class EngineIT extends PostgresContainerSupport {
       return new FakeModel();
     }
 
-    @Bean
-    @Primary
-    AiModelPort primaryModel(FakeModel fake) {
-      return fake;
-    }
   }
 
   private static final String WORKER = "test-worker:1";
@@ -111,11 +107,16 @@ class EngineIT extends PostgresContainerSupport {
   @Autowired RunExecutor executor;
   @Autowired WorkQueue queue;
   @Autowired FakeModel model;
+  @Autowired io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry breakers;
   @MockitoSpyBean OutboundHttp http;
 
   @BeforeEach
   void stubWorld() {
     model.reset();
+    // Earlier tests deliberately fail the world; do not let an open breaker leak between tests.
+    breakers.getAllCircuitBreakers().forEach(cb -> cb.reset());
+    // The Postgres container is shared by all integration test classes: start from an empty queue.
+    jdbc.update("DELETE FROM queue_jobs");
     world.resetAll();
     world.stubFor(
         post(urlEqualTo("/email/send"))

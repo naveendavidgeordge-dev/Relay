@@ -129,7 +129,7 @@ class HttpRequestNodeExecutorTest {
     // the seed hardcodes localhost:9210; in docker the alias points it at the mock-world service
     var params = json("{\"method\": \"GET\", \"url\": \"http://localhost:9210/orders/ord_2001\"}");
     HttpRequestNodeExecutor aliased =
-        executor(TestProps.relay(wm.baseUrl(), "http://localhost:9210=>" + wm.baseUrl(), "", 1000));
+        executor(TestProps.relay(wm.baseUrl(), "http://localhost:9210=>" + wm.baseUrl(), "", 5000));
     NodeResult.Completed r = (NodeResult.Completed) aliased.execute(ctx("http_request", "n", params, null));
     assertThat(r.output().path("status").asInt()).isEqualTo(200);
     assertThat(r.details()).singleElement()
@@ -139,7 +139,7 @@ class HttpRequestNodeExecutorTest {
   @Test
   void hostAllowlistBlocksOtherHosts() {
     var params = json("{\"method\": \"GET\", \"url\": \"http://169.254.169.254/latest/meta-data\"}");
-    HttpRequestNodeExecutor guarded = executor(TestProps.relay(wm.baseUrl(), "", "localhost", 1000));
+    HttpRequestNodeExecutor guarded = executor(TestProps.relay(wm.baseUrl(), "", "localhost", 5000));
     assertThatThrownBy(() -> guarded.execute(ctx("http_request", "n", params, null)))
         .isInstanceOf(NodeFailureException.class)
         .hasMessageContaining("RELAY_HTTP_ALLOWED_HOSTS");

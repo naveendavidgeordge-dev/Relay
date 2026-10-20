@@ -49,7 +49,7 @@ public class SamplePayloads {
 
   /** All samples in file order. */
   public List<JsonNode> all() {
-    return samples.stream().map(s -> (JsonNode) s.deepCopy()).toList();
+    return samples.stream().map(s -> s.<JsonNode>deepCopy()).toList();
   }
 
   /** A sample by id, e.g. {@code pay_201}. */
@@ -57,6 +57,6 @@ public class SamplePayloads {
     return samples.stream()
         .filter(s -> id.equals(s.path("id").asText()))
         .findFirst()
-        .map(s -> (JsonNode) s.deepCopy());
+        .map(s -> s.<JsonNode>deepCopy());
   }
 }

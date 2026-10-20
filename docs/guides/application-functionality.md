@@ -560,6 +560,11 @@ Then try `nl_trap_001` to see a refusal.
 
 ## 12. What is implemented — status board
 
+> **Update 2026-10-08:** the backend has now been built and tested in Docker. All backend unit and
+> integration tests pass, the official smoke test passes (28/0/0), and the kill-and-resume drill
+> passes the duplication check. Every 🟡 row below for a backend feature is therefore verified. See
+> `docs/reqs/step-log.md`, step 18.
+
 **Legend:** ✅ implemented and verified by running it · 🟡 implemented with automated tests written,
 not yet executed on the build machine (Java/Python/Docker were not installed) · ⏳ not done
 

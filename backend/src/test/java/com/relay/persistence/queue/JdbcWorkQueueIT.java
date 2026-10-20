@@ -38,6 +38,8 @@ class JdbcWorkQueueIT extends PostgresContainerSupport {
 
   @BeforeEach
   void seed() {
+    // The container is shared with other integration tests that commit queued runs.
+    jdbc.update("DELETE FROM queue_jobs");
     workflows.saveAndFlush(new WorkflowEntity("wf_q", "q", null, "manual", "{}", Instant.now()));
     for (String id : List.of("run_a", "run_b", "run_c")) {
       runs.saveAndFlush(

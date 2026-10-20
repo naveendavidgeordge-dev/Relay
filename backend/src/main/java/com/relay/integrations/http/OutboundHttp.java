@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpConnectTimeoutException;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
@@ -119,7 +118,7 @@ public class OutboundHttp {
     HttpResponse<String> res;
     try {
       res = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    } catch (HttpConnectTimeoutException | HttpTimeoutException e) {
+    } catch (HttpTimeoutException e) {
       throw new TransientNodeException(
           ErrorCode.NODE_TIMEOUT, method + " " + hostOf(uri) + " timed out", e);
     } catch (ConnectException e) {

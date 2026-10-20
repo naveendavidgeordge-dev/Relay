@@ -65,4 +65,23 @@ C2 (dispatch-time URL aliases → ADR-0005) and C3 (`cyclic_entry` = warning by 
 | 15 Docker + CI | brief §10 | `docker/*.Dockerfile`, `docker/docker-compose.yml` (+ TLS profile), `.github/workflows/ci.yml` | CI jobs incl. smoke + drill | 🟡 |
 | 16 NL compiler | "turns a plain-English description into a valid Draft workflow using only catalog node types — and refuses, with an explanation" (Case Study Good To Have) | `application/compiler/*`, `CompilerController`, console `/compiler` | `NlCompilerEvalTest` | 🟡 |
 | 17 Docs | "README with setup instructions, API documentation, architecture, and design decisions" (Case Study Deliverables) | `README.md`, `DESIGN/00–10`, `docs/api.md`, `docs/runbook.md` (report template), `docs/adr/0001–0006`, `docs/demo-script.md`, `.claude/skills/relay/SKILL.md`, `docs/reqs/traceability.md` | — | ✅ |
-| 18 Final verification | smoke test + drill output in the report | — | — | ⏳ needs JDK 21, Docker, Python 3.11 |
+| 18 Final verification | smoke test + drill output in the report | — | — | ✅ 2026-10-08 (see below) |
+
+## Step 18 — First real build and verification (2026-10-08) ✅
+
+Run entirely through Docker (no local JDK/Python). Defects found and fixed on the first build:
+
+| Defect | Kind | Fix |
+|---|---|---|
+| `catch (HttpConnectTimeoutException \| HttpTimeoutException e)` | compile error (subclass in multi-catch) | catch `HttpTimeoutException` only |
+| `map(JsonNode::deepCopy)` inferred `List<Object>` | compile error | `s -> s.<JsonNode>deepCopy()` |
+| `ClassAssert.isNotAssignableTo` absent in this AssertJ | test compile error | `isAssignableFrom(...)).isFalse()` |
+| HTTP executor tests timed out at 1 s | test flakiness (cold JVM first request ≈ 2.5 s) | test read timeout 5 s |
+| Testcontainers 1.21.3 vs Docker Engine 29 (API 1.32 rejected, min 1.40) | environment | Testcontainers 1.21.4 |
+| Fake AI model registered twice as `@Primary` | test config | single bean |
+| Shared test DB leaked queued jobs between classes; WireMock restarted per `@Nested` class; breaker left open | test isolation | clean queue, one WireMock server, reset breakers per test |
+| **Approval signature covered `decided_at` with nanoseconds; Postgres keeps microseconds → reloaded approval failed verification → gate refused a genuinely approved refund** | **product bug** | sign and store `decided_at` at microsecond precision; regression test `ApprovalDecisionSignerTest` |
+
+Results: backend unit tests all pass; integration tests all pass; `smoke_test.py` 28/0/0;
+kill-and-resume drill (SIGKILL during `pack_delay`) + `duplication_check.py` PASS; live
+`wf_support_triage` refund: waiting_approval with 0 refunds → approve → exactly 1 refund, run succeeded.

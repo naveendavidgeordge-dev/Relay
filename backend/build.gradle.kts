@@ -26,7 +26,7 @@ repositories {
 
 val resilience4jVersion = "2.3.0"
 val bouncyCastleVersion = "1.81"
-val testcontainersVersion = "1.21.3"
+val testcontainersVersion = "1.21.4"
 
 dependencyManagement {
     imports {

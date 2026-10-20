@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  BookOpen,
   CheckSquare,
+  Code2,
   LayoutDashboard,
   Moon,
   PlayCircle,
@@ -23,6 +25,11 @@ const NAV = [
   { href: "/runs", label: "Runs", Icon: PlayCircle, keys: "g r" },
   { href: "/approvals", label: "Approvals", Icon: CheckSquare, keys: "g a" },
   { href: "/compiler", label: "NL compiler", Icon: Wand2, keys: null },
+] as const;
+
+const DOCS_NAV = [
+  { href: "/guide", label: "User guide", Icon: BookOpen },
+  { href: "/docs", label: "Developer guide", Icon: Code2 },
 ] as const;
 
 function ThemeToggle() {
@@ -56,7 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       >
         Skip to content
       </a>
-      <aside className="border-b border-border bg-surface lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
+      <aside className="border-b border-border bg-surface lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:border-b-0 lg:border-r">
         <div className="flex h-14 items-center gap-2 px-5">
           <span
             aria-hidden
@@ -88,10 +95,46 @@ export function AppShell({ children }: { children: ReactNode }) {
               {keys ? <span className="kbd ml-auto hidden lg:inline">{keys}</span> : null}
             </Link>
           ))}
+          {/* Under 1024px the sidebar is a horizontal strip, so the docs links join it. */}
+          {DOCS_NAV.map(({ href, label, Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              aria-current={active(href) ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-elevated hover:text-fg lg:hidden",
+                active(href) && "bg-elevated text-fg",
+              )}
+            >
+              <Icon aria-hidden className={cn("size-4", active(href) && "text-accent")} />
+              {label}
+            </Link>
+          ))}
         </nav>
-        <p className="mt-auto hidden px-5 pb-5 pt-8 text-2xs text-subtle lg:block">
-          Press <span className="kbd">/</span> to search
-        </p>
+        <div className="mt-auto hidden px-3 pb-4 pt-6 lg:block">
+          <p className="mb-1 px-3 text-2xs font-medium uppercase tracking-wide text-subtle">
+            Documentation
+          </p>
+          <nav aria-label="Documentation" className="flex flex-col gap-1">
+            {DOCS_NAV.map(({ href, label, Icon }) => (
+              <Link
+                key={href}
+                href={href}
+                aria-current={active(href) ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm text-muted transition-colors hover:bg-elevated hover:text-fg",
+                  active(href) && "bg-elevated text-fg",
+                )}
+              >
+                <Icon aria-hidden className={cn("size-4", active(href) && "text-accent")} />
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <p className="px-3 pt-4 text-2xs text-subtle">
+            Press <span className="kbd">/</span> to search
+          </p>
+        </div>
       </aside>
       <div className="min-w-0">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur md:px-8">

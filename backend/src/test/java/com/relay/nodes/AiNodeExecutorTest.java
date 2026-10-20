@@ -95,6 +95,6 @@ class AiNodeExecutorTest {
   @Test
   void schemaViolationIsNotATransientError() {
     // NodeInvoker only retries TransientNodeException; a schema failure must not burn retries.
-    assertThat(NodeFailureException.class).isNotAssignableTo(TransientNodeException.class);
+    assertThat(TransientNodeException.class.isAssignableFrom(NodeFailureException.class)).isFalse();
   }
 }

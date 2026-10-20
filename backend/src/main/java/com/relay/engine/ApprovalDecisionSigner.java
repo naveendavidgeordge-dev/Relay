@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.relay.persistence.entity.ApprovalEntity;
 import com.relay.security.crypto.PayloadSigner;
 import com.relay.support.CanonicalJson;
+import java.time.temporal.ChronoUnit;
 import org.springframework.stereotype.Component;
 
 /**
@@ -50,7 +51,12 @@ public class ApprovalDecisionSigner implements ApprovalGate.ApprovalSignatures {
     n.put("step_sequence", a.getStepSequence());
     n.put("status", a.getStatus().wire());
     n.put("decided_by", a.getDecidedBy());
-    n.put("decided_at", a.getDecidedAt() == null ? null : a.getDecidedAt().toString());
+    // Microsecond precision: what Postgres stores. Nanoseconds would break verification on reload.
+    n.put(
+        "decided_at",
+        a.getDecidedAt() == null
+            ? null
+            : a.getDecidedAt().truncatedTo(ChronoUnit.MICROS).toString());
     return CanonicalJson.bytes(n);
   }
 }

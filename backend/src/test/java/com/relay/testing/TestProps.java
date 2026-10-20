@@ -30,6 +30,7 @@ public final class TestProps {
 
   /** Defaults pointing the mock world at {@code url}. */
   public static RelayProperties relay(String mockWorldUrl) {
-    return relay(mockWorldUrl, "", "", 1000);
+    // Generous read timeout: the first request in a fresh JVM (cold Jetty/JIT) can take seconds.
+    return relay(mockWorldUrl, "", "", 5000);
   }
 }

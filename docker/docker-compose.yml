@@ -75,7 +75,10 @@ services:
       mock-world: { condition: service_healthy }
 
   worker:
+    # Same image as backend; never pull (relay-backend:local only exists after a local build).
+    build: { context: .., dockerfile: docker/backend.Dockerfile }
     image: relay-backend:local
+    pull_policy: never
     container_name: relay-worker
     environment:
       <<: *backend-env

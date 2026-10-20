@@ -14,6 +14,8 @@ const PAGES = [
   { href: "/runs", label: "Runs" },
   { href: "/approvals", label: "Approvals" },
   { href: "/compiler", label: "NL compiler" },
+  { href: "/guide", label: "User guide" },
+  { href: "/docs", label: "Developer guide" },
 ];
 
 function typing(target: EventTarget | null): boolean {

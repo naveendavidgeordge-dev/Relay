@@ -12,6 +12,21 @@ make down                       # keeps the database volume (runs survive)
 
 Console: http://localhost:3000 · API: http://localhost:8080 · mock world: http://localhost:9210.
 
+## Running without Java/Python installed
+
+Everything can run through Docker (verified on Windows with Docker Desktop / Engine 29):
+
+```bash
+# backend unit + integration tests (Testcontainers talks to Docker through the socket)
+docker run --rm -v //var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal -e TESTCONTAINERS_RYUK_DISABLED=true -v "$PWD:/src" -v relay-gradle-cache:/home/gradle/.gradle -w /src gradle:8.14.3-jdk21 gradle -p backend --no-daemon test -Prelay.fixturesDir=/src/data
+# smoke test / duplication check against the running stack
+docker run --rm -v "$PWD:/app" -w /app python:3.11-slim python scripts/smoke_test.py --url http://host.docker.internal:8080 --token relay-demo-token --world http://host.docker.internal:9210
+docker run --rm -v "$PWD:/app" -w /app python:3.11-slim python scripts/duplication_check.py --url http://host.docker.internal:9210
+```
+
+On Git Bash prefix with `MSYS_NO_PATHCONV=1`. Testcontainers ≥ 1.21.4 is required for Docker Engine 29
+(older versions speak a Docker API the engine no longer accepts).
+
 ## Operating
 
 | Situation | Action |

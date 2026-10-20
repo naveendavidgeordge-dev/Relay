@@ -27,6 +27,7 @@ import com.relay.persistence.repository.StepRepository;
 import java.io.UncheckedIOException;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import org.springframework.context.ApplicationEventPublisher;
@@ -142,7 +143,7 @@ public class ApprovalService {
           ErrorCode.APPROVAL_ALREADY_DECIDED,
           "Run '" + run.getRunId() + "' is " + run.getStatus().wire() + ", not waiting_approval");
     }
-    Instant now = clock.instant();
+    Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS); // the precision Postgres keeps
     a.decide(decision, actor, now, comment);
     signer.sign(a);
 

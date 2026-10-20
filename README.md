@@ -263,9 +263,11 @@ test → implementation) is in [`docs/reqs/traceability.md`](docs/reqs/traceabil
 | Part | Verified on the build machine? |
 |---|---|
 | Console (`frontend/`) | **Yes** — 33 Vitest/RTL tests pass, `tsc --noEmit`, ESLint and Prettier clean, `next build` succeeds |
-| Backend (`backend/`) | Not yet — JDK 21 / Gradle / Docker were not installed; run `cd backend && gradle wrapper && ./gradlew test` |
-| AI sidecar (`ai-sidecar/`) | Not yet — Python 3.11 not installed; run `pip install -e ".[dev]" && pytest` |
-| Smoke test + kill-and-resume drill (step 18) | Not yet — needs the compose stack: `make up && make smoke && make drill`, then fill in the report template in [`docs/runbook.md`](docs/runbook.md) |
+| Backend (`backend/`) | **Yes** (2026-10-08, in Docker): unit tests all pass; integration tests (Testcontainers Postgres 16) all pass incl. engine, approvals, injection gate, caps, cancellation, crash recovery |
+| Full stack (`docker compose`) | **Yes**: `smoke_test.py` 28 passed / 0 warnings / 0 failed; kill-and-resume drill (SIGKILL during `pack_delay`) + `duplication_check.py` → PASS; live triage refund: paused at the gate, 1 refund only after approval |
+| AI sidecar unit tests (`ai-sidecar/`) | Not yet run (the sidecar container itself runs and serves the stack); `pip install -e ".[dev]" && pytest` |
+
+No local JDK or Python is needed — see [Running without Java/Python installed](docs/runbook.md#running-without-javapython-installed).
 
 New to the project? Start with the
 [**Application Functionality Guide**](docs/guides/application-functionality.md).
